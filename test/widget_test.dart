@@ -1,30 +1,19 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:payin_attachment/main.dart';
+import 'package:payin_attachment/data/mappers/pa_document_mapper.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  test('groups API rows by trrunno and sums line amounts', () {
+    final docs = groupRowsIntoDocuments([
+      {'trrunno': 'PA001', 'accname': 'Cash', 'refno': '01-02-26', 'amount': '100.50', 'flagcheck': 'Y'},
+      {'trrunno': 'PA001', 'accname': 'Bank', 'refno': 'X1', 'amount': 49.5},
+      {'trrunno': 'PA002', 'accname': 'Cash', 'refno': '-', 'amount': '20'},
+    ]);
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(docs.length, 2);
+    expect(docs[0].runNo, 'PA001');
+    expect(docs[0].lines.length, 2);
+    expect(docs[0].amount, 150.0);
+    expect(docs[0].isVerified, isTrue);
+    expect(docs[1].amount, 20.0);
   });
 }
