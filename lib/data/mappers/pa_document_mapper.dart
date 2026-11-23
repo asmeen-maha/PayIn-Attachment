@@ -7,7 +7,8 @@ List<PaDocument> groupRowsIntoDocuments(List<Map<String, dynamic>> rows) {
   final Map<String, _DocumentBuilder> byRunNo = {};
 
   for (final row in rows) {
-    final runNo = row['trrunno'].toString();
+    final runNo = row['trrunno']?.toString().trim() ?? '';
+    if (runNo.isEmpty) continue; // malformed row — nothing to group it under
     byRunNo.putIfAbsent(runNo, () => _DocumentBuilder(runNo, row)).lines.add(PaLine.fromJson(row));
   }
 

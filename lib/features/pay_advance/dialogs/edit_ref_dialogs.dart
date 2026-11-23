@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_text.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/pills.dart';
 
 /// Asks for a new reference number.
 ///
@@ -18,10 +19,10 @@ Future<String?> showEditRefNoDialog(BuildContext context, String? current) async
 Future<String?> _pickRefDate(BuildContext context, String? current) async {
   final picked = await showDatePicker(
     context: context,
+    helpText: 'เลือกวันที่อ้างอิง',
     initialDate: Fmt.parseRefDate(current) ?? DateTime.now(),
     firstDate: DateTime(2020),
     lastDate: DateTime.now(),
-    builder: AppTheme.datePickerTheme,
   );
   return picked == null ? null : Fmt.dashedDate(picked);
 }
@@ -29,7 +30,7 @@ Future<String?> _pickRefDate(BuildContext context, String? current) async {
 Future<String?> _editRefText(BuildContext context, String? current) {
   return showDialog<String>(
     context: context,
-    barrierDismissible: false,
+    barrierColor: AppColors.ink.withOpacity(.30),
     builder: (_) => _EditTextDialog(initialText: (current == null || current == '-') ? '' : current),
   );
 }
@@ -52,52 +53,53 @@ class _EditTextDialogState extends State<_EditTextDialog> {
     super.dispose();
   }
 
+  void _save() => Navigator.pop(context, _controller.text.trim());
+
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text(
-        'แก้ไขข้อมูลอ้างอิง',
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
-      ),
-      content: SizedBox(
-        width: MediaQuery.sizeOf(context).width * .3,
-        child: TextField(
-          controller: _controller,
-          autofocus: true,
-          style: const TextStyle(fontSize: 15),
-          decoration: InputDecoration(
-            hintText: 'กรอกข้อมูลที่ต้องการ...',
-            filled: true,
-            fillColor: Colors.grey.shade50,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppColors.primaryDark, width: 1.5),
-            ),
+    return Dialog(
+      backgroundColor: Colors.white.withOpacity(.96),
+      child: SizedBox(
+        width: 420,
+        child: Padding(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('แก้เลขอ้างอิง', style: AppText.display(18)),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _controller,
+                autofocus: true,
+                onSubmitted: (_) => _save(),
+                style: AppText.body(14),
+                decoration: InputDecoration(
+                  hintText: 'เช่น INV-2611-0381',
+                  hintStyle: AppText.body(14, color: AppColors.faint),
+                  filled: true,
+                  fillColor: AppColors.tint,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: AppColors.accent.withOpacity(.5), width: 1.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  PillButton(label: 'ยกเลิก', height: 40, onPressed: () => Navigator.pop(context)),
+                  const SizedBox(width: 10),
+                  PillButton(label: 'บันทึก', icon: Icons.check_rounded, height: 40, filled: true, tone: PillTone.accent, onPressed: _save),
+                ],
+              ),
+            ],
           ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey, fontSize: 16)),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, _controller.text),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primaryDark,
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          child: const Text('บันทึก', style: TextStyle(color: Colors.white, fontSize: 16)),
-        ),
-      ],
     );
   }
 }

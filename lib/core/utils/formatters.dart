@@ -11,8 +11,39 @@ class Fmt {
     'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
   ];
 
+  static const List<String> _thaiMonthsShort = [
+    '', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
+  ];
+
+  static const List<String> _thaiWeekdaysShort = ['', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.', 'อา.'];
+  static const List<String> _thaiWeekdays = ['', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์', 'อาทิตย์'];
+
   /// 1234.5 → `1,234.50`
   static String money(double value) => _money.format(value);
+
+  /// 1234.5 → `฿1,234.50`
+  static String baht(double value) => '฿${_money.format(value)}';
+
+  /// `พ.ย.`
+  static String thaiMonthShort(DateTime d) => _thaiMonthsShort[d.month];
+
+  /// `จ.`
+  static String thaiWeekdayShort(DateTime d) => _thaiWeekdaysShort[d.weekday];
+
+  /// `จันทร์ 23 พ.ย. 2026`
+  static String thaiDayLabel(DateTime d) => '${_thaiWeekdays[d.weekday]} ${d.day} ${thaiMonthShort(d)} ${d.year}';
+
+  /// `16 – 23 พ.ย. 2026` or `28 ต.ค. – 3 พ.ย. 2026`
+  static String thaiRange(DateTime start, DateTime end) {
+    if (start.year == end.year && start.month == end.month) {
+      return start.day == end.day
+          ? '${end.day} ${thaiMonthShort(end)} ${end.year}'
+          : '${start.day} – ${end.day} ${thaiMonthShort(end)} ${end.year}';
+    }
+    final startYear = start.year == end.year ? '' : ' ${start.year}';
+    return '${start.day} ${thaiMonthShort(start)}$startYear – ${end.day} ${thaiMonthShort(end)} ${end.year}';
+  }
 
   /// `2026-11-23` — format expected by the API.
   static String apiDate(DateTime d) => DateFormat('yyyy-MM-dd').format(d);

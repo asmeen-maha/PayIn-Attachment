@@ -1,58 +1,83 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_fonts.dart';
+import '../../../core/theme/app_text.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/glass.dart';
+import '../../../core/widgets/pills.dart';
 import '../../../data/models/pa_document.dart';
 
-/// One PA document in the list: number chip, verify checkbox, customer,
-/// account lines and total.
+/// One PA document as a glass card.
+///
+/// Edit / delete actions appear only on the selected card.
 class DocumentCard extends StatelessWidget {
   const DocumentCard({
     super.key,
     required this.document,
     required this.selected,
     required this.canEdit,
+    required this.canVerify,
     required this.onTap,
-    required this.onDocNoTap,
     required this.onVerify,
     required this.onEditAccount,
     required this.onEditRefNo,
+    required this.onDelete,
   });
 
   final PaDocument document;
   final bool selected;
   final bool canEdit;
+  final bool canVerify;
   final VoidCallback onTap;
-  final VoidCallback onDocNoTap;
   final VoidCallback onVerify;
-  final ValueChanged<PaLine> onEditAccount;
-  final ValueChanged<PaLine> onEditRefNo;
+  final VoidCallback onEditAccount;
+  final VoidCallback onEditRefNo;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12, right: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+    final doc = document;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.all(16),
-          decoration: _decoration(),
+        child: GlassPanel(
+          radius: 18,
+          highlight: selected,
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _topRow(),
-              const SizedBox(height: 12),
-              _customerRow(),
-              const SizedBox(height: 13),
-              _LinesTable(
-                document: document,
-                canEdit: canEdit,
-                onEditAccount: onEditAccount,
-                onEditRefNo: onEditRefNo,
+              _header(),
+              const SizedBox(height: 10),
+              Text(
+                doc.customerName ?? '-',
+                style: AppText.body(14, weight: FontWeight.w600),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
+              Row(
+                children: [
+                  Text(doc.extCode ?? '', style: AppText.muted(11.5)),
+                  if (doc.cpDocNo != null) ...[
+                    const SizedBox(width: 8),
+                    Text('ผูกกับ', style: AppText.muted(11)),
+                    const SizedBox(width: 4),
+                    Flexible(child: DocNoChip(docNo: doc.cpDocNo!, linked: true)),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 10),
+              for (final line in doc.lines) _LineRow(line: line),
+              if (selected && canEdit) ...[
+                const SizedBox(height: 10),
+                _actions(),
+              ],
+              const Spacer(),
+              const SizedBox(height: 10),
+              const Divider(height: 1, color: AppColors.hairline),
+              const SizedBox(height: 10),
+              _footer(),
             ],
           ),
         ),
@@ -60,216 +85,191 @@ class DocumentCard extends StatelessWidget {
     );
   }
 
-  BoxDecoration _decoration() => BoxDecoration(
-        color: selected ? AppColors.primaryDark.withOpacity(0.03) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: selected ? AppColors.primaryDark : Colors.grey.shade200,
-          width: selected ? 2 : 1,
-        ),
-        boxShadow: [
-          selected
-              ? BoxShadow(color: AppColors.primaryDark.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 6))
-              : BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 3)),
-        ],
-      );
-
-  Widget _topRow() {
-    final verified = document.isVerified;
-    final chipColor = verified ? Colors.green.shade700 : Colors.black87;
-
+  Widget _header() {
+    final doc = document;
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
-          children: [
-            GestureDetector(
-              onTap: onDocNoTap,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  color: verified ? Colors.green.shade50 : Colors.grey.shade100,
-                  border: Border.all(color: verified ? Colors.green.shade400 : Colors.grey.shade300),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.receipt_long_rounded, size: 18, color: verified ? Colors.green.shade700 : Colors.black54),
-                    const SizedBox(width: 6),
-                    Text(document.runNo, style: TextStyle(fontSize: 14, fontFamily: AppFonts.trajanProBold, color: chipColor)),
-                  ],
-                ),
-              ),
-            ),
-            if (document.hasSlip)
-              Padding(
-                padding: const EdgeInsets.only(left: 10),
-                child: document.slipIsPdf
-                    ? const Icon(Icons.picture_as_pdf_outlined, color: Colors.redAccent, size: 25)
-                    : const Icon(Icons.image_outlined, color: Colors.teal, size: 25),
-              ),
-          ],
-        ),
-        Row(
-          children: [
-            const Text('ตรวจสอบ', style: TextStyle(fontSize: 14, color: Colors.black54)),
-            const SizedBox(width: 8),
-            Checkbox(
-              value: verified,
-              activeColor: Colors.green,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-              onChanged: (_) => onVerify(),
-            ),
-          ],
-        ),
+        DocNoChip(docNo: doc.runNo, verified: doc.isVerified),
+        const SizedBox(width: 6),
+        StatusChip(verified: doc.isVerified),
+        const Spacer(),
+        _SlipBadge(document: doc),
       ],
     );
   }
 
-  Widget _customerRow() {
-    return Row(
+  Widget _actions() {
+    final firstRef = document.lines.firstOrNull?.refNo;
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
       children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), shape: BoxShape.circle),
-          child: const Icon(Icons.person_outline_rounded, size: 20, color: AppColors.primary),
+        PillButton(label: 'เปลี่ยนบัญชี', icon: Icons.edit_outlined, height: 28, onPressed: onEditAccount),
+        PillButton(
+          label: Fmt.looksLikeDate(firstRef) ? 'แก้วันที่อ้างอิง' : 'แก้เลขอ้างอิง',
+          icon: Fmt.looksLikeDate(firstRef) ? Icons.calendar_today_outlined : Icons.tag_rounded,
+          height: 28,
+          onPressed: onEditRefNo,
         ),
-        const SizedBox(width: 12),
+        PillButton(label: 'ลบ', icon: Icons.delete_outline_rounded, height: 28, tone: PillTone.danger, onPressed: onDelete),
+      ],
+    );
+  }
+
+  Widget _footer() {
+    final doc = document;
+    final zero = doc.amount <= 0;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
         Expanded(
-          child: Text(
-            document.customerLabel,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('ยอดรวม', style: AppText.muted(11)),
+              Text(Fmt.baht(doc.amount), style: AppText.display(19, color: zero ? AppColors.danger : AppColors.ink)),
+            ],
           ),
         ),
+        VerifyButton(verified: doc.isVerified, enabled: canVerify, onPressed: onVerify),
       ],
     );
   }
 }
 
-/// Account / Ref No. / Amount table with the document total.
-/// Only the first line is editable.
-class _LinesTable extends StatelessWidget {
-  const _LinesTable({
-    required this.document,
-    required this.canEdit,
-    required this.onEditAccount,
-    required this.onEditRefNo,
-  });
+class _LineRow extends StatelessWidget {
+  const _LineRow({required this.line});
+
+  final PaLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Expanded(
+            child: Text(line.accountName ?? '-', style: AppText.body(12.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+          const SizedBox(width: 10),
+          Text(line.refNo ?? '-', style: AppText.muted(11.5)),
+          const SizedBox(width: 10),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 70),
+            child: Text(Fmt.money(line.amount), textAlign: TextAlign.right, style: AppText.display(12.5, weight: FontWeight.w400)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SlipBadge extends StatelessWidget {
+  const _SlipBadge({required this.document});
 
   final PaDocument document;
-  final bool canEdit;
-  final ValueChanged<PaLine> onEditAccount;
-  final ValueChanged<PaLine> onEditRefNo;
-
-  static const _headerStyle = TextStyle(fontSize: 14, color: Colors.black45);
-  static const _cellStyle = TextStyle(fontSize: 15, color: Colors.black87);
 
   @override
   Widget build(BuildContext context) {
-    final lines = document.lines;
-    final total = document.amount;
-    final totalColor = document.isVerified
-        ? Colors.green.shade700
-        : total > 0
-            ? Colors.black
-            : Colors.red.shade700;
+    final (IconData icon, String label, Color color) = !document.hasSlip
+        ? (Icons.error_outline_rounded, 'ไม่มีสลิป', AppColors.danger)
+        : document.slipIsPdf
+            ? (Icons.picture_as_pdf_outlined, 'PDF', AppColors.muted)
+            : (Icons.image_outlined, 'รูปภาพ', AppColors.muted);
 
     return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        children: [
-          if (lines.isNotEmpty)
-            const Row(
-              children: [
-                Expanded(flex: 3, child: Text('รายการ (Account)', style: _headerStyle)),
-                Expanded(flex: 2, child: Text('อ้างอิง (Ref No.)', style: _headerStyle)),
-                Expanded(flex: 2, child: Text('จำนวนเงิน (Amount)', textAlign: TextAlign.right, style: _headerStyle)),
-              ],
-            ),
-          for (var i = 0; i < lines.length; i++) _lineRow(lines[i], editable: i == 0),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: Divider(height: 1, color: Colors.black12),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('ยอดรวม', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-              Text(
-                Fmt.money(total),
-                style: TextStyle(fontSize: 20, fontFamily: AppFonts.trajanProBold, color: totalColor),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _lineRow(PaLine line, {required bool editable}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(.7), borderRadius: BorderRadius.circular(8)),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            flex: 3,
-            child: Row(children: [
-              Text(line.accountName ?? '-', style: _cellStyle),
-              const SizedBox(width: 8),
-              if (editable) _EditButton(enabled: canEdit, onTap: () => onEditAccount(line)),
-            ]),
-          ),
-          Expanded(
-            flex: 2,
-            child: Row(children: [
-              Text(line.refNo ?? '-', style: _cellStyle),
-              const SizedBox(width: 8),
-              if (editable) _EditButton(enabled: canEdit, onTap: () => onEditRefNo(line)),
-            ]),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              Fmt.money(line.amount),
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 15, fontFamily: AppFonts.trajanPro, color: Colors.black87),
-            ),
-          ),
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: AppText.body(11, color: color)),
         ],
       ),
     );
   }
 }
 
-class _EditButton extends StatelessWidget {
-  const _EditButton({required this.enabled, required this.onTap});
+/// Pill used to verify a document; solid green once verified.
+class VerifyButton extends StatelessWidget {
+  const VerifyButton({
+    super.key,
+    required this.verified,
+    required this.enabled,
+    required this.onPressed,
+    this.large = false,
+  });
 
+  final bool verified;
   final bool enabled;
-  final VoidCallback onTap;
+  final VoidCallback onPressed;
+  final bool large;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: enabled ? AppColors.primary.withOpacity(.1) : Colors.grey.shade200,
-            borderRadius: BorderRadius.circular(8),
+    final height = large ? 38.0 : 34.0;
+
+    if (verified) {
+      return Container(
+        height: height,
+        padding: const EdgeInsets.fromLTRB(10, 0, 14, 0),
+        decoration: BoxDecoration(color: AppColors.success, borderRadius: BorderRadius.circular(999)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check_rounded, size: 16, color: Colors.white),
+            const SizedBox(width: 6),
+            Text('ตรวจแล้ว', style: AppText.body(12.5, weight: FontWeight.w600, color: Colors.white)),
+          ],
+        ),
+      );
+    }
+
+    final button = Opacity(
+      opacity: enabled ? 1 : .5,
+      child: Material(
+        color: large ? AppColors.success : Colors.white.withOpacity(.75),
+        shape: StadiumBorder(side: large ? BorderSide.none : const BorderSide(color: AppColors.success, width: 1.5)),
+        elevation: large && enabled ? 4 : 0,
+        shadowColor: AppColors.success.withOpacity(.4),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: enabled ? onPressed : null,
+          child: Container(
+            height: height,
+            padding: EdgeInsets.fromLTRB(large ? 14 : 10, 0, large ? 18 : 14, 0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                large
+                    ? const Icon(Icons.check_rounded, size: 17, color: Colors.white)
+                    : Container(
+                        width: 16,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.success, width: 1.5),
+                        ),
+                      ),
+                const SizedBox(width: 7),
+                Text(
+                  'ตรวจสอบ',
+                  style: AppText.body(large ? 13 : 12.5, weight: FontWeight.w600, color: large ? Colors.white : AppColors.success),
+                ),
+              ],
+            ),
           ),
-          child: Icon(Icons.edit_rounded, size: 16, color: enabled ? AppColors.primaryDark : Colors.grey.shade600),
         ),
       ),
+    );
+
+    return Tooltip(
+      message: enabled ? 'ยืนยันแล้วแก้กลับไม่ได้' : 'เฉพาะฝ่ายการเงินเท่านั้น',
+      child: button,
     );
   }
 }

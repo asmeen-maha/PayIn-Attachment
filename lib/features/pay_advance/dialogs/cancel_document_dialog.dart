@@ -1,248 +1,206 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_fonts.dart';
+import '../../../core/theme/app_text.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/pills.dart';
 import '../../../data/models/pa_document.dart';
 
-/// Shows the PA (and its linked CP document, if any) with a two-step
-/// delete button for each. [onCancelDocument] is called with the doc number.
+/// One dialog that lists the PA and its linked CP document (if any).
+/// Each can be ticked separately; both are ticked by default.
 Future<void> showCancelDocumentDialog(
   BuildContext context, {
   required PaDocument document,
-  required Future<void> Function(String docNo) onCancelDocument,
+  required Future<void> Function(List<String> docNos) onCancel,
 }) {
   return showDialog(
     context: context,
-    barrierDismissible: false,
-    builder: (_) => _CancelDocumentDialog(document: document, onCancelDocument: onCancelDocument),
+    barrierColor: AppColors.ink.withOpacity(.30),
+    builder: (_) => _CancelDocumentDialog(document: document, onCancel: onCancel),
   );
 }
 
-class _CancelDocumentDialog extends StatelessWidget {
-  const _CancelDocumentDialog({required this.document, required this.onCancelDocument});
+class _CancelDocumentDialog extends StatefulWidget {
+  const _CancelDocumentDialog({required this.document, required this.onCancel});
 
   final PaDocument document;
-  final Future<void> Function(String docNo) onCancelDocument;
+  final Future<void> Function(List<String> docNos) onCancel;
 
   @override
-  Widget build(BuildContext context) {
-    final cpDocNo = document.cpDocNo;
-    final width = MediaQuery.sizeOf(context).width;
-
-    Widget section(String docNo) => _DocSection(
-          docNo: docNo,
-          amount: document.amount,
-          onConfirm: () async {
-            await onCancelDocument(docNo);
-            if (context.mounted) Navigator.pop(context);
-          },
-        );
-
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      child: Container(
-        width: width * (cpDocNo != null ? 0.5 : 0.3),
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), shape: BoxShape.circle),
-                  child: const Icon(Icons.person_outline_rounded, size: 20, color: AppColors.primary),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    document.customerLabel,
-                    style: const TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded, color: Colors.grey),
-                ),
-              ],
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Divider(height: 1, color: Colors.black12),
-            ),
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: section(document.runNo)),
-                  if (cpDocNo != null) ...[
-                    const VerticalDivider(width: 40, thickness: 1, color: Colors.black12),
-                    Expanded(child: section(cpDocNo)),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  State<_CancelDocumentDialog> createState() => _CancelDocumentDialogState();
 }
 
-enum _DeleteStep { idle, confirming, deleting }
+class _CancelDocumentDialogState extends State<_CancelDocumentDialog> {
+  late final Map<String, bool> _selected = {
+    widget.document.runNo: true,
+    if (widget.document.cpDocNo != null) widget.document.cpDocNo!: true,
+  };
+  bool _deleting = false;
+  String? _error;
 
-class _DocSection extends StatefulWidget {
-  const _DocSection({required this.docNo, required this.amount, required this.onConfirm});
-
-  final String docNo;
-  final double amount;
-  final Future<void> Function() onConfirm;
-
-  @override
-  State<_DocSection> createState() => _DocSectionState();
-}
-
-class _DocSectionState extends State<_DocSection> {
-  _DeleteStep _step = _DeleteStep.idle;
+  List<String> get _chosen => [for (final e in _selected.entries) if (e.value) e.key];
 
   Future<void> _confirm() async {
-    setState(() => _step = _DeleteStep.deleting);
+    setState(() {
+      _deleting = true;
+      _error = null;
+    });
     try {
-      await widget.onConfirm();
+      await widget.onCancel(_chosen);
+      if (mounted) Navigator.pop(context);
     } catch (e) {
-      debugPrint('Cancel ${widget.docNo} failed: $e');
-      if (mounted) setState(() => _step = _DeleteStep.confirming);
+      debugPrint('Cancel documents failed: $e');
+      if (mounted) {
+        setState(() {
+          _deleting = false;
+          _error = 'ลบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final danger = Colors.red.shade700;
+    final doc = widget.document;
+    final warnings = [
+      if (doc.amount <= 0) 'ยอดเอกสารเป็น 0.00',
+      if (!doc.hasSlip) 'ยังไม่มีสลิปแนบ',
+    ];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.red.shade200),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.delete_outline_rounded, size: 18, color: danger),
-                  const SizedBox(width: 6),
-                  Text(widget.docNo, style: TextStyle(fontSize: 18, fontFamily: AppFonts.trajanProBold, color: danger)),
-                ],
-              ),
-            ),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              transitionBuilder: (child, animation) => FadeTransition(
-                opacity: animation,
-                child: ScaleTransition(scale: animation, child: child),
-              ),
-              child: switch (_step) {
-                _DeleteStep.idle => IconButton(
-                    key: const ValueKey('delete'),
-                    tooltip: 'Delete ${widget.docNo}',
-                    onPressed: () => setState(() => _step = _DeleteStep.confirming),
-                    icon: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(color: Colors.red.shade50, shape: BoxShape.circle),
-                      child: Icon(Icons.delete_forever_rounded, color: Colors.red.shade600, size: 20),
-                    ),
-                  ),
-                _DeleteStep.confirming => Row(
-                    key: const ValueKey('confirm'),
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('ยืนยันลบ?', style: TextStyle(fontSize: 14, color: danger, fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 8),
-                      _RoundButton(icon: Icons.check_rounded, color: Colors.red.shade600, iconColor: Colors.white, onTap: _confirm),
-                      const SizedBox(width: 6),
-                      _RoundButton(
-                        icon: Icons.close_rounded,
-                        color: Colors.grey.shade200,
-                        iconColor: Colors.black54,
-                        onTap: () => setState(() => _step = _DeleteStep.idle),
-                      ),
-                    ],
-                  ),
-                _DeleteStep.deleting => Row(
-                    key: const ValueKey('deleting'),
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(color: Colors.red.shade400, strokeWidth: 2),
-                      ),
-                      const SizedBox(width: 8),
-                      Text('กำลังลบ...', style: TextStyle(fontSize: 14, color: danger, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-              },
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Dialog(
+      backgroundColor: Colors.white.withOpacity(.94),
+      insetPadding: const EdgeInsets.all(24),
+      child: SizedBox(
+        width: 430,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('จำนวนเงิน', style: TextStyle(fontSize: 14, color: Colors.black54)),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(color: AppColors.dangerSoft, borderRadius: BorderRadius.circular(14)),
+                child: const Icon(Icons.delete_outline_rounded, size: 22, color: AppColors.danger),
+              ),
+              const SizedBox(height: 14),
+              Text('ลบเอกสาร ${doc.runNo}?', style: AppText.display(19)),
+              const SizedBox(height: 4),
               Text(
-                Fmt.money(widget.amount),
-                style: TextStyle(
-                  fontSize: 16,
-                  fontFamily: AppFonts.trajanProBold,
-                  color: widget.amount > 0 ? Colors.green.shade700 : danger,
+                doc.cpDocNo == null
+                    ? 'ลบแล้วกู้คืนไม่ได้'
+                    : 'เลือกเอกสารที่ต้องการลบ เอกสาร CP ที่ผูกกันจะถูกเลือกไว้ด้วย ลบแล้วกู้คืนไม่ได้',
+                style: AppText.muted(13),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                decoration: BoxDecoration(color: AppColors.tint, borderRadius: BorderRadius.circular(16)),
+                child: Column(
+                  children: [
+                    _row(doc.runNo, doc.customerName ?? '', doc.amount, linked: false),
+                    if (doc.cpDocNo != null) ...[
+                      const Divider(height: 1, color: AppColors.hairline, indent: 8, endIndent: 8),
+                      _row(doc.cpDocNo!, 'CP ที่ผูกกัน', doc.amount, linked: true),
+                    ],
+                  ],
                 ),
+              ),
+              if (warnings.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _Banner(icon: Icons.info_outline_rounded, text: warnings.join(' และ'), color: AppColors.warning, background: AppColors.warningSoft),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                _Banner(icon: Icons.error_outline_rounded, text: _error!, color: AppColors.danger, background: AppColors.dangerSoft),
+              ],
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  PillButton(label: 'ยกเลิก', height: 40, onPressed: _deleting ? null : () => Navigator.pop(context)),
+                  const SizedBox(width: 10),
+                  _deleting
+                      ? const _DeletingPill()
+                      : PillButton(
+                          label: 'ลบ ${_chosen.length} เอกสาร',
+                          icon: Icons.delete_outline_rounded,
+                          height: 40,
+                          filled: true,
+                          tone: PillTone.danger,
+                          onPressed: _chosen.isEmpty ? null : _confirm,
+                        ),
+                ],
               ),
             ],
           ),
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _row(String docNo, String caption, double amount, {required bool linked}) {
+    return CheckboxListTile(
+      value: _selected[docNo],
+      onChanged: _deleting ? null : (v) => setState(() => _selected[docNo] = v ?? false),
+      controlAffinity: ListTileControlAffinity.leading,
+      activeColor: AppColors.danger,
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+      title: Row(
+        children: [
+          DocNoChip(docNo: docNo, linked: linked),
+          const SizedBox(width: 10),
+          Expanded(child: Text(caption, style: AppText.body(12.5), maxLines: 1, overflow: TextOverflow.ellipsis)),
+          const SizedBox(width: 8),
+          Text(Fmt.baht(amount), style: AppText.display(12.5)),
+        ],
+      ),
     );
   }
 }
 
-class _RoundButton extends StatelessWidget {
-  const _RoundButton({required this.icon, required this.color, required this.iconColor, required this.onTap});
+class _Banner extends StatelessWidget {
+  const _Banner({required this.icon, required this.text, required this.color, required this.background});
 
   final IconData icon;
+  final String text;
   final Color color;
-  final Color iconColor;
-  final VoidCallback onTap;
+  final Color background;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        child: Icon(icon, color: iconColor, size: 18),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: AppText.body(12, color: color))),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeletingPill extends StatelessWidget {
+  const _DeletingPill();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      decoration: BoxDecoration(color: AppColors.danger.withOpacity(.85), borderRadius: BorderRadius.circular(999)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+          const SizedBox(width: 8),
+          Text('กำลังลบ…', style: AppText.body(13, weight: FontWeight.w600, color: Colors.white)),
+        ],
       ),
     );
   }

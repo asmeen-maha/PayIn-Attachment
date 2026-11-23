@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_info.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_fonts.dart';
+import '../../../core/theme/app_text.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/glass.dart';
 import '../../../core/widgets/loading_indicator.dart';
+import '../pay_advance_controller.dart';
 
-/// Left column: list of document dates, with sort toggle and app version.
+/// Left glass panel: day cards with a progress ring.
 class DateListPanel extends StatelessWidget {
   const DateListPanel({
     super.key,
@@ -14,107 +17,180 @@ class DateListPanel extends StatelessWidget {
     required this.loaded,
     required this.selectedDate,
     required this.ascending,
+    required this.stats,
     required this.onSelect,
     required this.onToggleSort,
+    required this.onRetry,
+    this.error,
   });
 
   final List<String> dates;
   final bool loaded;
   final String? selectedDate;
   final bool ascending;
+  final Map<String, DayStats> stats;
   final ValueChanged<String> onSelect;
   final VoidCallback onToggleSort;
+  final VoidCallback onRetry;
+  final String? error;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 5),
-        Row(
-          children: [
-            const Text('วันที่', style: TextStyle(fontSize: 20, color: Colors.black)),
-            const SizedBox(width: 8),
-            IconButton(
-              onPressed: onToggleSort,
-              tooltip: 'เรียงวันที่',
-              icon: Icon(
-                ascending ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_up_rounded,
-                color: AppColors.primaryDark,
-                size: 20,
-              ),
-            ),
-          ],
-        ),
-        Expanded(
-          child: loaded
-              ? ListView.builder(
-                  itemCount: dates.length,
-                  itemBuilder: (_, i) => _DateTile(
-                    date: dates[i],
-                    selected: dates[i] == selectedDate,
-                    onTap: () => onSelect(dates[i]),
+    return GlassPanel(
+      padding: const EdgeInsets.fromLTRB(10, 14, 10, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 0, 0, 6),
+            child: Row(
+              children: [
+                Text('วันที่', style: AppText.display(14)),
+                const Spacer(),
+                Tooltip(
+                  message: ascending ? 'เก่า → ใหม่' : 'ใหม่ → เก่า',
+                  child: InkWell(
+                    onTap: onToggleSort,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      width: 26,
+                      height: 26,
+                      decoration: BoxDecoration(color: AppColors.glassStrong, borderRadius: BorderRadius.circular(8)),
+                      child: Icon(
+                        ascending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                        size: 14,
+                        color: AppColors.muted,
+                      ),
+                    ),
                   ),
-                )
-              : const LoadingIndicator(),
-        ),
-        const _VersionTag(),
-      ],
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: !loaded
+                ? const LoadingIndicator(size: 36)
+                : error != null
+                    ? ErrorState(message: error!, onRetry: onRetry, compact: true)
+                    : dates.isEmpty
+                        ? Center(child: Text('ไม่มีเอกสารในช่วงนี้', style: AppText.muted(12)))
+                        : ListView.separated(
+                            itemCount: dates.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 4),
+                            itemBuilder: (_, i) => _DayTile(
+                              date: DateTime.parse(dates[i]),
+                              stats: stats[dates[i]],
+                              selected: dates[i] == selectedDate,
+                              onTap: () => onSelect(dates[i]),
+                            ),
+                          ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+                  decoration: BoxDecoration(color: AppColors.glassStrong, borderRadius: BorderRadius.circular(999)),
+                  child: Text(AppInfo.version, style: AppText.muted(11)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _DateTile extends StatelessWidget {
-  const _DateTile({required this.date, required this.selected, required this.onTap});
+class _DayTile extends StatelessWidget {
+  const _DayTile({required this.date, required this.stats, required this.selected, required this.onTap});
 
-  final String date;
+  final DateTime date;
+  final DayStats? stats;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primaryDark : AppColors.primarySoft,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: selected
-                ? [BoxShadow(color: AppColors.primaryDark.withOpacity(0.4), blurRadius: 6, offset: const Offset(0, 3))]
-                : const [],
-          ),
-          child: Text(
-            Fmt.shortDate(DateTime.parse(date)),
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 15,
-              color: selected ? Colors.white : Colors.black87,
-              fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+    final s = stats;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? Colors.white.withOpacity(.92) : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: selected ? AppColors.accent.withOpacity(.5) : Colors.transparent, width: 1.5),
+          boxShadow: selected
+              ? [BoxShadow(color: AppColors.accent.withOpacity(.16), blurRadius: 16, offset: const Offset(0, 6))]
+              : null,
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 34,
+              child: Text(
+                '${date.day}',
+                textAlign: TextAlign.center,
+                style: AppText.display(20, color: selected ? AppColors.accent : AppColors.ink),
+              ),
             ),
-          ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${Fmt.thaiMonthShort(date)} · ${Fmt.thaiWeekdayShort(date)}',
+                    style: AppText.body(11.5, weight: FontWeight.w600),
+                  ),
+                  Text(
+                    s == null ? 'ยังไม่ได้เปิดดู' : '${s.verified}/${s.total} ตรวจแล้ว',
+                    style: AppText.muted(10.5),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            ProgressRing(stats: s),
+          ],
         ),
       ),
     );
   }
 }
 
-class _VersionTag extends StatelessWidget {
-  const _VersionTag();
+/// 26px ring; solid green with a check when the day is fully verified.
+class ProgressRing extends StatelessWidget {
+  const ProgressRing({super.key, required this.stats});
+
+  final DayStats? stats;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(color: Colors.grey.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-      child: const Text(
-        AppInfo.version,
-        style: TextStyle(fontFamily: AppFonts.trajanPro, fontSize: 11, color: Colors.black, letterSpacing: 0.5),
+    final s = stats;
+    if (s != null && s.isComplete) {
+      return Container(
+        width: 26,
+        height: 26,
+        decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle),
+        child: const Icon(Icons.check_rounded, size: 15, color: Colors.white),
+      );
+    }
+    return SizedBox(
+      width: 26,
+      height: 26,
+      child: CircularProgressIndicator(
+        value: s?.progress ?? 0,
+        strokeWidth: 4,
+        strokeCap: StrokeCap.round,
+        color: AppColors.success,
+        backgroundColor: AppColors.hairline,
       ),
     );
   }

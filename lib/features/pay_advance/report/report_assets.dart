@@ -9,7 +9,17 @@ class ReportAssets {
   final pw.Font pgVim;
   final pw.Font trajanPro; // bold cut, used for numbers and English titles
 
-  static Future<ReportAssets> load() async {
+  static Future<ReportAssets>? _cached;
+
+  /// Loaded and parsed once per session; later reports reuse them.
+  static Future<ReportAssets> load() {
+    return _cached ??= _load().catchError((Object e) {
+      _cached = null; // allow a retry next time
+      throw e;
+    });
+  }
+
+  static Future<ReportAssets> _load() async {
     Future<Uint8List> bytes(String path) async => (await rootBundle.load(path)).buffer.asUint8List();
 
     return ReportAssets(
