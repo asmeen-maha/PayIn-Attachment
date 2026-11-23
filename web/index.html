@@ -31,8 +31,13 @@
 
   <title>payin_attachment</title>
   <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
 </head>
 <body>
+  <script src="assets/pdfjs/pdf.min.js"></script>
+  <script type="text/javascript">
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "assets/pdfjs/pdf.worker.min.js";
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
