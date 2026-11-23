@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/glass.dart';
+import '../../../core/widgets/network_picture/network_picture.dart';
 import '../../../core/widgets/pills.dart';
 import '../../../data/models/access_flag.dart';
 import '../pay_advance_controller.dart';
@@ -233,11 +234,10 @@ class _UserPill extends StatelessWidget {
                 color: Colors.white,
                 child: photoUrl == null
                     ? _initialsText()
-                    : Image.network(
-                        photoUrl,
+                    : NetworkPicture(
+                        url: photoUrl,
                         fit: BoxFit.cover,
-                        cacheWidth: 96, // decode small: shown at 28px
-                        errorBuilder: (_, __, ___) => _initialsText(),
+                        errorBuilder: (_) => _initialsText(),
                       ),
               ),
             ),

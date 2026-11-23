@@ -7,6 +7,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/glass.dart';
 import '../../../core/widgets/loading_indicator.dart';
+import '../../../core/widgets/network_picture/network_picture.dart';
 import '../../../data/models/pa_document.dart';
 import '../dialogs/image_viewer_dialog.dart';
 import 'document_card.dart' show VerifyButton;
@@ -25,26 +26,15 @@ class SlipPanel extends StatefulWidget {
 }
 
 class _SlipPanelState extends State<SlipPanel> {
-  final _zoom = TransformationController();
   double _scale = 1;
 
   @override
   void didUpdateWidget(SlipPanel old) {
     super.didUpdateWidget(old);
-    if (old.document?.runNo != widget.document?.runNo) _setScale(1);
+    if (old.document?.runNo != widget.document?.runNo) _scale = 1;
   }
 
-  @override
-  void dispose() {
-    _zoom.dispose();
-    super.dispose();
-  }
-
-  void _setScale(double scale) {
-    _scale = scale.clamp(1.0, 4.0);
-    _zoom.value = Matrix4.identity()..scale(_scale);
-    if (mounted) setState(() {});
-  }
+  void _setScale(double scale) => setState(() => _scale = scale.clamp(1.0, 4.0));
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +54,7 @@ class _SlipPanelState extends State<SlipPanel> {
                 Expanded(child: _stage(doc)),
                 const SizedBox(height: 8),
                 Text(
-                  doc.slipIsPdf ? 'แตะเพื่อเปิด PDF ในแท็บใหม่' : 'แตะสลิปเพื่อดูเต็มจอ · ใช้ล้อเมาส์เพื่อซูม',
+                  doc.slipIsPdf ? 'แตะเพื่อเปิด PDF ในแท็บใหม่' : 'แตะสลิปเพื่อดูเต็มจอ · ปุ่ม + / − เพื่อซูม แล้วลากเพื่อเลื่อน',
                   textAlign: TextAlign.center,
                   style: AppText.muted(11),
                 ),
@@ -148,28 +138,15 @@ class _SlipPanelState extends State<SlipPanel> {
     } else if (doc.slipIsPdf) {
       content = _PdfCard(onOpen: () => _openInNewTab(url));
     } else {
-      content = InteractiveViewer(
-        transformationController: _zoom,
-        minScale: 1,
-        maxScale: 4,
-        onInteractionEnd: (_) => setState(() => _scale = _zoom.value.getMaxScaleOnAxis()),
-        child: GestureDetector(
-          onTap: () => showImageViewer(context, url),
-          child: Center(
-            child: Image.network(
-              url,
-              fit: BoxFit.contain,
-              // Phone photos are often 3000-4000px wide. The panel is ~330px
-              // and zooms up to 4x, so decoding at 1400px keeps it sharp while
-              // using a fraction of the memory and decode time.
-              cacheWidth: 1400,
-              loadingBuilder: (context, child, progress) =>
-                  progress == null ? child : const LoadingIndicator(size: 36),
-              errorBuilder: (_, __, ___) =>
-                  const EmptyState(icon: Icons.broken_image_outlined, message: 'โหลดรูปสลิปไม่สำเร็จ'),
-            ),
-          ),
-        ),
+      // NetworkPicture: plain <img> on web, so the slip server needs no CORS.
+      content = NetworkPicture(
+        url: url,
+        zoom: _scale,
+        // Only open the full-screen viewer from the fitted view; when zoomed,
+        // clicks are used for dragging the image around.
+        onTap: _scale > 1 ? null : () => showImageViewer(context, url),
+        loading: const LoadingIndicator(size: 36),
+        errorBuilder: (_) => const EmptyState(icon: Icons.broken_image_outlined, message: 'โหลดรูปสลิปไม่สำเร็จ'),
       );
     }
 
