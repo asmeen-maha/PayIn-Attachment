@@ -1,43 +1,57 @@
 <!DOCTYPE html>
-<html>
+<html lang="th">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
     href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
+    The path must start and end with a slash "/".
   -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="PayIn Attachment — Pay Advance review">
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="payin_attachment">
+  <meta name="apple-mobile-web-app-title" content="PayIn">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>payin_attachment</title>
+  <title>PayIn Attachment</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
+
+  <!-- Start downloading the app code while the bootstrap script loads. -->
+  <link rel="preload" href="main.dart.js" as="script">
+
+  <style>
+    html, body { margin: 0; height: 100%; background: #F7F2F7; }
+    #splash { position: fixed; inset: 0; display: grid; place-items: center; }
+    #splash i {
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 3px solid #F3D3E3; border-top-color: #C42A78;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
 </head>
 <body>
-  <script src="assets/pdfjs/pdf.min.js"></script>
-  <script type="text/javascript">
-      pdfjsLib.GlobalWorkerOptions.workerSrc = "assets/pdfjs/pdf.worker.min.js";
+  <div id="splash" aria-label="กำลังโหลด"><i></i></div>
+  <script>
+    // Remove the splash as soon as Flutter renders its first frame.
+    window.addEventListener('flutter-first-frame', function () {
+      var s = document.getElementById('splash');
+      if (s) s.remove();
+    });
   </script>
+  <!--
+    pdf.js for the report preview (printing package), served locally.
+    When pdfjsLib exists with a workerSrc, printing uses it and never
+    falls back to unpkg.com. `defer` keeps it off the startup critical path.
+  -->
+  <script src="assets/pdfjs/pdf.min.js" defer
+          onload="pdfjsLib.GlobalWorkerOptions.workerSrc = 'assets/pdfjs/pdf.worker.min.js';"></script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
